@@ -20,4 +20,9 @@ router.post(
 
 router.get('/me', authMiddleware, AuthController.getMe);
 
+// ==========================================
+// BARU: ENDPOINT LOGOUT
+// ==========================================
+router.post('/logout', authMiddleware, AuthController.logout);
+
 export default router;
