@@ -9,4 +9,8 @@ const router = (0, express_1.Router)();
 router.post('/register', [(0, validation_1.nameValidation)('name', 'Nama Lengkap'), validation_1.emailValidation, validation_1.passwordValidation, validationMiddleware_1.handleValidationErrors], authController_1.AuthController.register);
 router.post('/login', [validation_1.emailValidation, validationMiddleware_1.handleValidationErrors], authController_1.AuthController.login);
 router.get('/me', authMiddleware_1.authMiddleware, authController_1.AuthController.getMe);
+// ==========================================
+// BARU: ENDPOINT LOGOUT
+// ==========================================
+router.post('/logout', authMiddleware_1.authMiddleware, authController_1.AuthController.logout);
 exports.default = router;

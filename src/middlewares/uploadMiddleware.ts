@@ -32,11 +32,17 @@ export function createUploader(subfolder: 'stores' | 'products' | 'hampers') {
   });
 
   const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif'];
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const allowedTypes: Record<string, string[]> = {
+      '.jpg': ['image/jpeg', 'image/jpg'],
+      '.jpeg': ['image/jpeg', 'image/jpg'],
+      '.png': ['image/png']
+    };
+
+    if (allowedTypes[extension]?.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Hanya file gambar (JPEG, PNG, WEBP, GIF) yang diperbolehkan'));
+      cb(new Error('Hanya file gambar JPG, JPEG, dan PNG yang diperbolehkan'));
     }
   };
 
@@ -49,6 +55,44 @@ export function createUploader(subfolder: 'stores' | 'products' | 'hampers') {
   });
 }
 
-export const uploadStoreImage = createUploader('stores').single('image');
-export const uploadProductImage = createUploader('products').single('image');
-export const uploadHampersImage = createUploader('hampers').single('image');
+function createImageUpload(subfolder: 'stores' | 'products' | 'hampers') {
+  const upload = createUploader(subfolder).single('image');
+
+  return (req: any, res: any, next: (error?: Error) => void) => {
+    upload(req, res, async (error) => {
+      if (error) return next(error);
+      if (!req.file) return next();
+
+      try {
+        const handle = await fs.promises.open(req.file.path, 'r');
+        const signature = Buffer.alloc(8);
+        let bytesRead: number;
+
+        try {
+          ({ bytesRead } = await handle.read(signature, 0, signature.length, 0));
+        } finally {
+          await handle.close();
+        }
+
+        const extension = path.extname(req.file.originalname).toLowerCase();
+        const isPng = bytesRead === 8 && signature.equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+        const isJpeg = bytesRead >= 3 && signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
+        const signatureMatchesExtension = extension === '.png' ? isPng : isJpeg;
+
+        if (!signatureMatchesExtension) {
+          await fs.promises.unlink(req.file.path);
+          return next(new Error('Hanya file gambar JPG, JPEG, dan PNG yang diperbolehkan'));
+        }
+
+        next();
+      } catch (validationError) {
+        await fs.promises.unlink(req.file.path).catch(() => undefined);
+        next(validationError as Error);
+      }
+    });
+  };
+}
+
+export const uploadStoreImage = createImageUpload('stores');
+export const uploadProductImage = createImageUpload('products');
+export const uploadHampersImage = createImageUpload('hampers');

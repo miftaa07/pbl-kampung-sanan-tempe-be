@@ -145,5 +145,32 @@ class AuthController {
             });
         }
     }
+    // ==========================================
+    // BARU: FUNGSI LOGOUT (MENGGUNAKAN CLASS METHOD)
+    // ==========================================
+    static async logout(req, res) {
+        try {
+            // Jika request membawa data user terautentikasi, catat aktivitas logout ke database
+            if (req.user) {
+                await activityModel_1.ActivityModel.create({
+                    user_id: req.user.id,
+                    action: 'Logout',
+                    module: 'Auth',
+                    description: `User "${req.user.name}" (${req.user.role}) telah keluar dari sistem admin.`
+                });
+            }
+            return res.json({
+                success: true,
+                message: 'Logout berhasil'
+            });
+        }
+        catch (err) {
+            console.error('[Logout Error]:', err);
+            return res.status(500).json({
+                success: false,
+                message: 'Terjadi kesalahan saat logout'
+            });
+        }
+    }
 }
 exports.AuthController = AuthController;
