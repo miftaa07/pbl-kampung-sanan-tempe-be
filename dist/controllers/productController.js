@@ -93,7 +93,7 @@ class ProductController {
             }
             let image = sanitized.image || null;
             if (req.file) {
-                image = `/uploads/products/${req.file.filename}`;
+                image = req.file.path;
             }
             const productId = await productModel_1.ProductModel.create({
                 store_id: parseInt(store_id, 10),
@@ -147,7 +147,7 @@ class ProductController {
             const { store_id, name, price, variant, size, description, status } = sanitized;
             let image = sanitized.image !== undefined ? sanitized.image : existingProduct.image;
             if (req.file) {
-                image = `/uploads/products/${req.file.filename}`;
+                image = req.file.path;
             }
             await productModel_1.ProductModel.update(id, {
                 store_id: store_id ? parseInt(store_id, 10) : undefined,

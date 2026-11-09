@@ -65,7 +65,7 @@ export class StoreController {
       // Handle image file or string URL
       let image = sanitized.image || null;
       if (req.file) {
-        image = `/uploads/stores/${req.file.filename}`;
+        image = req.file.path;
       }
 
       const storeId = await StoreModel.create({
@@ -127,7 +127,7 @@ export class StoreController {
 
       let image = sanitized.image !== undefined ? sanitized.image : existingStore.image;
       if (req.file) {
-        image = `/uploads/stores/${req.file.filename}`;
+        image = req.file.path;
       }
 
       await StoreModel.update(id, {

@@ -8,7 +8,7 @@ exports.createUploader = createUploader;
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-// Ensure upload directories exist
+const cloudinary_1 = __importDefault(require("../config/cloudinary"));
 const uploadDirs = [
     path_1.default.join(process.cwd(), 'uploads'),
     path_1.default.join(process.cwd(), 'uploads', 'stores'),
@@ -27,7 +27,6 @@ function createUploader(subfolder) {
             cb(null, dest);
         },
         filename: (req, file, cb) => {
-            // Safe unique filename
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = path_1.default.extname(file.originalname).toLowerCase();
             const safeName = path_1.default.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -64,8 +63,10 @@ function createImageUpload(subfolder) {
                 return next(error);
             if (!req.file)
                 return next();
+            const localFilePath = req.file.path;
             try {
-                const handle = await fs_1.default.promises.open(req.file.path, 'r');
+                // 1. Validasi magic bytes
+                const handle = await fs_1.default.promises.open(localFilePath, 'r');
                 const signature = Buffer.alloc(8);
                 let bytesRead;
                 try {
@@ -79,14 +80,24 @@ function createImageUpload(subfolder) {
                 const isJpeg = bytesRead >= 3 && signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
                 const signatureMatchesExtension = extension === '.png' ? isPng : isJpeg;
                 if (!signatureMatchesExtension) {
-                    await fs_1.default.promises.unlink(req.file.path);
+                    await fs_1.default.promises.unlink(localFilePath).catch(() => undefined);
                     return next(new Error('Hanya file gambar JPG, JPEG, dan PNG yang diperbolehkan'));
                 }
+                // 2. Upload ke Cloudinary
+                const cloudinaryResult = await cloudinary_1.default.uploader.upload(localFilePath, {
+                    folder: `sanan-tempe/${subfolder}`,
+                    resource_type: 'image',
+                });
+                // 3. Hapus file sementara di folder lokal
+                await fs_1.default.promises.unlink(localFilePath).catch(() => undefined);
+                // 4. Simpan URL HTTPS Cloudinary ke req.file.path
+                req.file.path = cloudinaryResult.secure_url;
+                req.file.filename = cloudinaryResult.public_id;
                 next();
             }
-            catch (validationError) {
-                await fs_1.default.promises.unlink(req.file.path).catch(() => undefined);
-                next(validationError);
+            catch (uploadError) {
+                await fs_1.default.promises.unlink(localFilePath).catch(() => undefined);
+                next(uploadError);
             }
         });
     };

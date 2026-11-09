@@ -1,8 +1,8 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import cloudinary from '../config/cloudinary';
 
-// Ensure upload directories exist
 const uploadDirs = [
   path.join(process.cwd(), 'uploads'),
   path.join(process.cwd(), 'uploads', 'stores'),
@@ -23,7 +23,6 @@ export function createUploader(subfolder: 'stores' | 'products' | 'hampers') {
       cb(null, dest);
     },
     filename: (req, file, cb) => {
-      // Safe unique filename
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
       const ext = path.extname(file.originalname).toLowerCase();
       const safeName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -63,8 +62,11 @@ function createImageUpload(subfolder: 'stores' | 'products' | 'hampers') {
       if (error) return next(error);
       if (!req.file) return next();
 
+      const localFilePath = req.file.path;
+
       try {
-        const handle = await fs.promises.open(req.file.path, 'r');
+        // 1. Validasi magic bytes
+        const handle = await fs.promises.open(localFilePath, 'r');
         const signature = Buffer.alloc(8);
         let bytesRead: number;
 
@@ -80,14 +82,32 @@ function createImageUpload(subfolder: 'stores' | 'products' | 'hampers') {
         const signatureMatchesExtension = extension === '.png' ? isPng : isJpeg;
 
         if (!signatureMatchesExtension) {
-          await fs.promises.unlink(req.file.path);
+          await fs.promises.unlink(localFilePath).catch(() => undefined);
           return next(new Error('Hanya file gambar JPG, JPEG, dan PNG yang diperbolehkan'));
         }
 
+        // 2. Upload ke Cloudinary dengan timeout 60 detik & optimasi gambar
+        const cloudinaryResult = await cloudinary.uploader.upload(localFilePath, {
+          folder: `sanan-tempe/${subfolder}`,
+          resource_type: 'image',
+          timeout: 60000,
+          transformation: [
+            { width: 1200, crop: 'limit' },
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        });
+
+        // 3. Hapus file sementara di folder lokal
+        await fs.promises.unlink(localFilePath).catch(() => undefined);
+
+        // 4. Simpan URL HTTPS Cloudinary ke req.file.path
+        req.file.path = cloudinaryResult.secure_url;
+        req.file.filename = cloudinaryResult.public_id;
+
         next();
-      } catch (validationError) {
-        await fs.promises.unlink(req.file.path).catch(() => undefined);
-        next(validationError as Error);
+      } catch (uploadError) {
+        await fs.promises.unlink(localFilePath).catch(() => undefined);
+        next(uploadError as Error);
       }
     });
   };

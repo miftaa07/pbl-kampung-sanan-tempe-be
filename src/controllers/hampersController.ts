@@ -77,7 +77,7 @@ export class HampersController {
 
       let image = sanitized.image || null;
       if (req.file) {
-        image = `/uploads/hampers/${req.file.filename}`;
+        image = req.file.path;
       }
 
       const hampersId = await HampersModel.create(
@@ -151,7 +151,7 @@ export class HampersController {
 
       let image = sanitized.image !== undefined ? sanitized.image : existingHamper.image;
       if (req.file) {
-        image = `/uploads/hampers/${req.file.filename}`;
+        image = req.file.path;
       }
 
       await HampersModel.update(

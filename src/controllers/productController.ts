@@ -99,7 +99,7 @@ export class ProductController {
 
       let image = sanitized.image || null;
       if (req.file) {
-        image = `/uploads/products/${req.file.filename}`;
+        image = req.file.path;
       }
 
       const productId = await ProductModel.create({
@@ -160,7 +160,7 @@ export class ProductController {
 
       let image = sanitized.image !== undefined ? sanitized.image : existingProduct.image;
       if (req.file) {
-        image = `/uploads/products/${req.file.filename}`;
+        image = req.file.path;
       }
 
       await ProductModel.update(id, {
