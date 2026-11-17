@@ -27,33 +27,78 @@ export interface Hampers {
 
 export class HampersModel {
   static async findAll(filters: { search?: string; status?: string } = {}): Promise<Hampers[]> {
-    let query = `
-      SELECT h.*, 
+    const { where, params } = this.buildWhereClause(filters);
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT h.*,
         COUNT(hi.id) as item_count,
         COALESCE(SUM(hi.quantity), 0) as total_products
-      FROM hampers h
-      LEFT JOIN hampers_items hi ON h.id = hi.hampers_id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+       FROM hampers h
+       LEFT JOIN hampers_items hi ON h.id = hi.hampers_id
+       ${where}
+       GROUP BY h.id
+       ORDER BY h.id DESC`,
+      params
+    );
+
+    return this.attachItems(rows as Hampers[]);
+  }
+
+  static async findAllPaginated(
+    filters: { search?: string; status?: string } = {},
+    page: number = 1,
+    perPage: number = 10
+  ) {
+    const { where, params } = this.buildWhereClause(filters);
+    const [countRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total
+       FROM hampers h
+       ${where}`,
+      params
+    );
+    const totalData = Number(countRows[0].total);
+    const totalPages = Math.ceil(totalData / perPage);
+    const offset = (page - 1) * perPage;
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT h.*,
+        COUNT(hi.id) as item_count,
+        COALESCE(SUM(hi.quantity), 0) as total_products
+       FROM hampers h
+       LEFT JOIN hampers_items hi ON h.id = hi.hampers_id
+       ${where}
+       GROUP BY h.id
+       ORDER BY h.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, perPage, offset]
+    );
+
+    return {
+      data: await this.attachItems(rows as Hampers[]),
+      pagination: { currentPage: page, perPage, totalData, totalPages }
+    };
+  }
+
+  private static buildWhereClause(filters: {
+    search?: string;
+    status?: string;
+  }) {
+    let where = 'WHERE 1=1';
+    const params: string[] = [];
 
     if (filters.search) {
-      query += ` AND (h.name LIKE ? OR h.description LIKE ?)`;
+      where += ` AND (h.name LIKE ? OR h.description LIKE ?)`;
       const searchPattern = `%${filters.search}%`;
       params.push(searchPattern, searchPattern);
     }
 
     if (filters.status && filters.status !== 'Semua') {
-      query += ` AND h.status = ?`;
+      where += ` AND h.status = ?`;
       params.push(filters.status);
     }
 
-    query += ` GROUP BY h.id ORDER BY h.id DESC`;
+    return { where, params };
+  }
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
-
-    // Fetch items for each hamper
-    const hampersList = rows as Hampers[];
+  private static async attachItems(hampersList: Hampers[]): Promise<Hampers[]> {
     for (const h of hampersList) {
       const [items] = await pool.query<RowDataPacket[]>(
         `SELECT hi.*, p.name as product_name, p.price as product_price, p.image as product_image, s.name as store_name

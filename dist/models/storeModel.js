@@ -27,6 +27,54 @@ class StoreModel {
         const [rows] = await database_1.default.query(query, params);
         return rows;
     }
+    // script filter pagination 
+    static async findAllPaginated(filters = {}, page = 1, perPage = 10) {
+        let query = `
+      SELECT s.*,
+        (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) as product_count
+      FROM stores s
+      WHERE 1=1
+    `;
+        let countQuery = `
+      SELECT COUNT(*) as total
+      FROM stores s
+      WHERE 1=1
+    `;
+        const params = [];
+        const countParams = [];
+        if (filters.search) {
+            const searchPattern = `%${filters.search}%`;
+            const condition = ` AND (s.name LIKE ? OR s.owner LIKE ? OR s.area LIKE ? OR s.address LIKE ?)`;
+            query += condition;
+            countQuery += condition;
+            params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+            countParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
+        }
+        if (filters.status && filters.status !== 'Semua') {
+            query += ` AND s.status = ?`;
+            countQuery += ` AND s.status = ?`;
+            params.push(filters.status);
+            countParams.push(filters.status);
+        }
+        // Menghitung total data sesuai filter
+        const [countRows] = await database_1.default.query(countQuery, countParams);
+        const totalData = Number(countRows[0].total);
+        const totalPages = Math.ceil(totalData / perPage);
+        const offset = (page - 1) * perPage;
+        // Mengambil data sesuai halaman
+        query += ` ORDER BY s.id DESC LIMIT ? OFFSET ?`;
+        params.push(perPage, offset);
+        const [rows] = await database_1.default.query(query, params);
+        return {
+            data: rows,
+            pagination: {
+                currentPage: page,
+                perPage,
+                totalData,
+                totalPages
+            }
+        };
+    }
     static async findById(id) {
         const [rows] = await database_1.default.query('SELECT * FROM stores WHERE id = ? LIMIT 1', [id]);
         if (rows.length === 0)

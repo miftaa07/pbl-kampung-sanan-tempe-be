@@ -7,28 +7,54 @@ exports.HampersModel = void 0;
 const database_1 = __importDefault(require("../config/database"));
 class HampersModel {
     static async findAll(filters = {}) {
-        let query = `
-      SELECT h.*, 
+        const { where, params } = this.buildWhereClause(filters);
+        const [rows] = await database_1.default.query(`SELECT h.*,
         COUNT(hi.id) as item_count,
         COALESCE(SUM(hi.quantity), 0) as total_products
-      FROM hampers h
-      LEFT JOIN hampers_items hi ON h.id = hi.hampers_id
-      WHERE 1=1
-    `;
+       FROM hampers h
+       LEFT JOIN hampers_items hi ON h.id = hi.hampers_id
+       ${where}
+       GROUP BY h.id
+       ORDER BY h.id DESC`, params);
+        return this.attachItems(rows);
+    }
+    static async findAllPaginated(filters = {}, page = 1, perPage = 10) {
+        const { where, params } = this.buildWhereClause(filters);
+        const [countRows] = await database_1.default.query(`SELECT COUNT(*) as total
+       FROM hampers h
+       ${where}`, params);
+        const totalData = Number(countRows[0].total);
+        const totalPages = Math.ceil(totalData / perPage);
+        const offset = (page - 1) * perPage;
+        const [rows] = await database_1.default.query(`SELECT h.*,
+        COUNT(hi.id) as item_count,
+        COALESCE(SUM(hi.quantity), 0) as total_products
+       FROM hampers h
+       LEFT JOIN hampers_items hi ON h.id = hi.hampers_id
+       ${where}
+       GROUP BY h.id
+       ORDER BY h.id DESC
+       LIMIT ? OFFSET ?`, [...params, perPage, offset]);
+        return {
+            data: await this.attachItems(rows),
+            pagination: { currentPage: page, perPage, totalData, totalPages }
+        };
+    }
+    static buildWhereClause(filters) {
+        let where = 'WHERE 1=1';
         const params = [];
         if (filters.search) {
-            query += ` AND (h.name LIKE ? OR h.description LIKE ?)`;
+            where += ` AND (h.name LIKE ? OR h.description LIKE ?)`;
             const searchPattern = `%${filters.search}%`;
             params.push(searchPattern, searchPattern);
         }
         if (filters.status && filters.status !== 'Semua') {
-            query += ` AND h.status = ?`;
+            where += ` AND h.status = ?`;
             params.push(filters.status);
         }
-        query += ` GROUP BY h.id ORDER BY h.id DESC`;
-        const [rows] = await database_1.default.query(query, params);
-        // Fetch items for each hamper
-        const hampersList = rows;
+        return { where, params };
+    }
+    static async attachItems(hampersList) {
         for (const h of hampersList) {
             const [items] = await database_1.default.query(`SELECT hi.*, p.name as product_name, p.price as product_price, p.image as product_image, s.name as store_name
          FROM hampers_items hi

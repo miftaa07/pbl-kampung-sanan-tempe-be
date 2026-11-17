@@ -11,6 +11,29 @@ class ProductController {
             const search = req.query.search ? String(req.query.search) : undefined;
             const store_id = req.query.store_id ? parseInt(String(req.query.store_id), 10) : undefined;
             const status = req.query.status ? String(req.query.status) : undefined;
+            const hasPagination = req.query.page !== undefined ||
+                req.query.perPage !== undefined;
+            if (hasPagination) {
+                const page = Number(req.query.page ?? 1);
+                const perPage = Number(req.query.perPage ?? 10);
+                if (!Number.isInteger(page) ||
+                    !Number.isInteger(perPage) ||
+                    page < 1 ||
+                    perPage < 1 ||
+                    perPage > 100) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Parameter page atau perPage tidak valid'
+                    });
+                }
+                const result = await productModel_1.ProductModel.findAllPaginated({ search, store_id, status }, page, perPage);
+                return res.json({
+                    success: true,
+                    message: 'Data produk berhasil diambil',
+                    data: result.data,
+                    pagination: result.pagination
+                });
+            }
             const products = await productModel_1.ProductModel.findAll({ search, store_id, status });
             return res.json({
                 success: true,

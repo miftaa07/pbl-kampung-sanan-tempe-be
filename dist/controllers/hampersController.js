@@ -9,6 +9,29 @@ class HampersController {
         try {
             const search = req.query.search ? String(req.query.search) : undefined;
             const status = req.query.status ? String(req.query.status) : undefined;
+            const hasPagination = req.query.page !== undefined ||
+                req.query.perPage !== undefined;
+            if (hasPagination) {
+                const page = Number(req.query.page ?? 1);
+                const perPage = Number(req.query.perPage ?? 10);
+                if (!Number.isInteger(page) ||
+                    !Number.isInteger(perPage) ||
+                    page < 1 ||
+                    perPage < 1 ||
+                    perPage > 100) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Parameter page atau perPage tidak valid'
+                    });
+                }
+                const result = await hampersModel_1.HampersModel.findAllPaginated({ search, status }, page, perPage);
+                return res.json({
+                    success: true,
+                    message: 'Data hampers berhasil diambil',
+                    data: result.data,
+                    pagination: result.pagination
+                });
+            }
             const hampers = await hampersModel_1.HampersModel.findAll({ search, status });
             return res.json({
                 success: true,

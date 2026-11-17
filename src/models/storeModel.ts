@@ -46,6 +46,78 @@ export class StoreModel {
     return rows as Store[];
   }
 
+  // script filter pagination 
+  static async findAllPaginated(
+    filters: { search?: string; status?: string } = {},
+    page: number = 1,
+    perPage: number = 10
+  ) {
+    let query = `
+      SELECT s.*,
+        (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) as product_count
+      FROM stores s
+      WHERE 1=1
+    `;
+
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM stores s
+      WHERE 1=1
+    `;
+
+    const params: any[] = [];
+    const countParams: any[] = [];
+
+    if (filters.search) {
+      const searchPattern = `%${filters.search}%`;
+      const condition = ` AND (s.name LIKE ? OR s.owner LIKE ? OR s.area LIKE ? OR s.address LIKE ?)`;
+
+      query += condition;
+      countQuery += condition;
+
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+      countParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    if (filters.status && filters.status !== 'Semua') {
+      query += ` AND s.status = ?`;
+      countQuery += ` AND s.status = ?`;
+
+      params.push(filters.status);
+      countParams.push(filters.status);
+    }
+
+    // Menghitung total data sesuai filter
+    const [countRows] = await pool.query<RowDataPacket[]>(
+      countQuery,
+      countParams
+    );
+
+    const totalData = Number(countRows[0].total);
+    const totalPages = Math.ceil(totalData / perPage);
+    const offset = (page - 1) * perPage;
+
+    // Mengambil data sesuai halaman
+    query += ` ORDER BY s.id DESC LIMIT ? OFFSET ?`;
+    params.push(perPage, offset);
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      query,
+      params
+    );
+
+    return {
+      data: rows as Store[],
+      pagination: {
+        currentPage: page,
+        perPage,
+        totalData,
+        totalPages
+      }
+    };
+  }
+
+
   static async findById(id: number): Promise<Store | null> {
     const [rows] = await pool.query<RowDataPacket[]>(
       'SELECT * FROM stores WHERE id = ? LIMIT 1',

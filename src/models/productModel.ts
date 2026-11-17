@@ -18,34 +18,76 @@ export interface Product {
 
 export class ProductModel {
   static async findAll(filters: { search?: string; store_id?: number; status?: string } = {}): Promise<Product[]> {
-    let query = `
-      SELECT p.*, s.name as store_name
-      FROM products p
-      LEFT JOIN stores s ON p.store_id = s.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    const { where, params } = this.buildWhereClause(filters);
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT p.*, s.name as store_name
+       FROM products p
+       LEFT JOIN stores s ON p.store_id = s.id
+       ${where}
+       ORDER BY p.id DESC`,
+      params
+    );
+    return rows as Product[];
+  }
+
+  static async findAllPaginated(
+    filters: { search?: string; store_id?: number; status?: string } = {},
+    page: number = 1,
+    perPage: number = 10
+  ) {
+    const { where, params } = this.buildWhereClause(filters);
+    const [countRows] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) as total
+       FROM products p
+       LEFT JOIN stores s ON p.store_id = s.id
+       ${where}`,
+      params
+    );
+    const totalData = Number(countRows[0].total);
+    const totalPages = Math.ceil(totalData / perPage);
+    const offset = (page - 1) * perPage;
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT p.*, s.name as store_name
+       FROM products p
+       LEFT JOIN stores s ON p.store_id = s.id
+       ${where}
+       ORDER BY p.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, perPage, offset]
+    );
+
+    return {
+      data: rows as Product[],
+      pagination: { currentPage: page, perPage, totalData, totalPages }
+    };
+  }
+
+  private static buildWhereClause(filters: {
+    search?: string;
+    store_id?: number;
+    status?: string;
+  }) {
+    let where = 'WHERE 1=1';
+    const params: (string | number)[] = [];
 
     if (filters.search) {
-      query += ` AND (p.name LIKE ? OR p.variant LIKE ? OR s.name LIKE ?)`;
+      where += ` AND (p.name LIKE ? OR p.variant LIKE ? OR s.name LIKE ?)`;
       const searchPattern = `%${filters.search}%`;
       params.push(searchPattern, searchPattern, searchPattern);
     }
 
     if (filters.store_id) {
-      query += ` AND p.store_id = ?`;
+      where += ` AND p.store_id = ?`;
       params.push(filters.store_id);
     }
 
     if (filters.status && filters.status !== 'Semua') {
-      query += ` AND p.status = ?`;
+      where += ` AND p.status = ?`;
       params.push(filters.status);
     }
 
-    query += ` ORDER BY p.id DESC`;
-
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
-    return rows as Product[];
+    return { where, params };
   }
 
   static async findById(id: number): Promise<Product | null> {

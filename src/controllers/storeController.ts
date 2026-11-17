@@ -5,25 +5,70 @@ import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { sanitizeObject } from '../utils/sanitizer';
 
 export class StoreController {
-  static async getAllStores(req: Request, res: Response) {
-    try {
-      const search = req.query.search ? String(req.query.search) : undefined;
-      const status = req.query.status ? String(req.query.status) : undefined;
 
-      const stores = await StoreModel.findAll({ search, status });
+static async getAllStores(req: Request, res: Response) {
+  try {
+    const search = req.query.search
+      ? String(req.query.search)
+      : undefined;
+
+    const status = req.query.status
+      ? String(req.query.status)
+      : undefined;
+
+    // Pagination hanya aktif jika parameter dikirim
+    const hasPagination =
+      req.query.page !== undefined ||
+      req.query.perPage !== undefined;
+
+    if (hasPagination) {
+      const parsedPage = Number(req.query.page ?? 1);
+      const parsedPerPage = Number(req.query.perPage ?? 10);
+
+      if (
+        !Number.isInteger(parsedPage) ||
+        !Number.isInteger(parsedPerPage) ||
+        parsedPage < 1 ||
+        parsedPerPage < 1 ||
+        parsedPerPage > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Parameter page atau perPage tidak valid'
+        });
+      }
+
+      const result = await StoreModel.findAllPaginated(
+        { search, status },
+        parsedPage,
+        parsedPerPage
+      );
+
       return res.json({
         success: true,
         message: 'Data toko berhasil diambil',
-        data: stores
-      });
-    } catch (err: any) {
-      console.error('[GetAllStores Error]:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Gagal mengambil data toko'
+        data: result.data,
+        pagination: result.pagination
       });
     }
+
+    // Format lama tetap dipertahankan untuk pengguna API lama
+    const stores = await StoreModel.findAll({ search, status });
+
+    return res.json({
+      success: true,
+      message: 'Data toko berhasil diambil',
+      data: stores
+    });
+  } catch (err: any) {
+    console.error('[GetAllStores Error]:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal mengambil data toko'
+    });
   }
+}
+
 
   static async getStoreById(req: Request, res: Response) {
     try {

@@ -7,29 +7,51 @@ exports.ProductModel = void 0;
 const database_1 = __importDefault(require("../config/database"));
 class ProductModel {
     static async findAll(filters = {}) {
-        let query = `
-      SELECT p.*, s.name as store_name
-      FROM products p
-      LEFT JOIN stores s ON p.store_id = s.id
-      WHERE 1=1
-    `;
+        const { where, params } = this.buildWhereClause(filters);
+        const [rows] = await database_1.default.query(`SELECT p.*, s.name as store_name
+       FROM products p
+       LEFT JOIN stores s ON p.store_id = s.id
+       ${where}
+       ORDER BY p.id DESC`, params);
+        return rows;
+    }
+    static async findAllPaginated(filters = {}, page = 1, perPage = 10) {
+        const { where, params } = this.buildWhereClause(filters);
+        const [countRows] = await database_1.default.query(`SELECT COUNT(*) as total
+       FROM products p
+       LEFT JOIN stores s ON p.store_id = s.id
+       ${where}`, params);
+        const totalData = Number(countRows[0].total);
+        const totalPages = Math.ceil(totalData / perPage);
+        const offset = (page - 1) * perPage;
+        const [rows] = await database_1.default.query(`SELECT p.*, s.name as store_name
+       FROM products p
+       LEFT JOIN stores s ON p.store_id = s.id
+       ${where}
+       ORDER BY p.id DESC
+       LIMIT ? OFFSET ?`, [...params, perPage, offset]);
+        return {
+            data: rows,
+            pagination: { currentPage: page, perPage, totalData, totalPages }
+        };
+    }
+    static buildWhereClause(filters) {
+        let where = 'WHERE 1=1';
         const params = [];
         if (filters.search) {
-            query += ` AND (p.name LIKE ? OR p.variant LIKE ? OR s.name LIKE ?)`;
+            where += ` AND (p.name LIKE ? OR p.variant LIKE ? OR s.name LIKE ?)`;
             const searchPattern = `%${filters.search}%`;
             params.push(searchPattern, searchPattern, searchPattern);
         }
         if (filters.store_id) {
-            query += ` AND p.store_id = ?`;
+            where += ` AND p.store_id = ?`;
             params.push(filters.store_id);
         }
         if (filters.status && filters.status !== 'Semua') {
-            query += ` AND p.status = ?`;
+            where += ` AND p.status = ?`;
             params.push(filters.status);
         }
-        query += ` ORDER BY p.id DESC`;
-        const [rows] = await database_1.default.query(query, params);
-        return rows;
+        return { where, params };
     }
     static async findById(id) {
         const [rows] = await database_1.default.query(`SELECT p.*, s.name as store_name

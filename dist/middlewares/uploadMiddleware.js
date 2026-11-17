@@ -83,10 +83,15 @@ function createImageUpload(subfolder) {
                     await fs_1.default.promises.unlink(localFilePath).catch(() => undefined);
                     return next(new Error('Hanya file gambar JPG, JPEG, dan PNG yang diperbolehkan'));
                 }
-                // 2. Upload ke Cloudinary
+                // 2. Upload ke Cloudinary dengan timeout 60 detik & optimasi gambar
                 const cloudinaryResult = await cloudinary_1.default.uploader.upload(localFilePath, {
                     folder: `sanan-tempe/${subfolder}`,
                     resource_type: 'image',
+                    timeout: 60000,
+                    transformation: [
+                        { width: 1200, crop: 'limit' },
+                        { quality: 'auto', fetch_format: 'auto' }
+                    ]
                 });
                 // 3. Hapus file sementara di folder lokal
                 await fs_1.default.promises.unlink(localFilePath).catch(() => undefined);
