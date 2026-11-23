@@ -26,7 +26,11 @@ export interface Hampers {
 }
 
 export class HampersModel {
-  static async findAll(filters: { search?: string; status?: string } = {}): Promise<Hampers[]> {
+  static async findAll(filters: {
+    search?: string;
+    status?: string;
+    storeId?: number;
+  } = {}): Promise<Hampers[]> {
     const { where, params } = this.buildWhereClause(filters);
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT h.*,
@@ -44,7 +48,7 @@ export class HampersModel {
   }
 
   static async findAllPaginated(
-    filters: { search?: string; status?: string } = {},
+    filters: { search?: string; status?: string; storeId?: number } = {},
     page: number = 1,
     perPage: number = 10
   ) {
@@ -80,9 +84,10 @@ export class HampersModel {
   private static buildWhereClause(filters: {
     search?: string;
     status?: string;
+    storeId?: number;
   }) {
     let where = 'WHERE 1=1';
-    const params: string[] = [];
+    const params: (string | number)[] = [];
 
     if (filters.search) {
       where += ` AND (h.name LIKE ? OR h.description LIKE ?)`;
@@ -93,6 +98,16 @@ export class HampersModel {
     if (filters.status && filters.status !== 'Semua') {
       where += ` AND h.status = ?`;
       params.push(filters.status);
+    }
+
+    if (filters.storeId !== undefined) {
+      where += ` AND EXISTS (
+        SELECT 1
+        FROM hampers_items hi
+        JOIN products p ON hi.product_id = p.id
+        WHERE hi.hampers_id = h.id AND p.store_id = ?
+      )`;
+      params.push(filters.storeId);
     }
 
     return { where, params };

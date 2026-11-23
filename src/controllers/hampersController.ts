@@ -9,6 +9,20 @@ export class HampersController {
     try {
       const search = req.query.search ? String(req.query.search) : undefined;
       const status = req.query.status ? String(req.query.status) : undefined;
+      const storeId =
+        req.query.store_id !== undefined
+          ? Number(req.query.store_id)
+          : undefined;
+
+      if (
+        storeId !== undefined &&
+        (!Number.isInteger(storeId) || storeId < 1)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Parameter store_id tidak valid'
+        });
+      }
 
       const hasPagination =
         req.query.page !== undefined ||
@@ -32,7 +46,7 @@ export class HampersController {
         }
 
         const result = await HampersModel.findAllPaginated(
-          { search, status },
+          { search, status, storeId },
           page,
           perPage
         );
@@ -45,7 +59,7 @@ export class HampersController {
         });
       }
 
-      const hampers = await HampersModel.findAll({ search, status });
+      const hampers = await HampersModel.findAll({ search, status, storeId });
       return res.json({
         success: true,
         message: 'Data hampers berhasil diambil',
