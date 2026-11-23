@@ -1,21 +1,28 @@
+
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 export async function migrate() {
+  const dbName = process.env.DB_NAME;
+
+  if (!dbName) {
+    throw new Error('DB_NAME belum diatur di file .env');
+  }
+
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || ''
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT || 4000),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: dbName,
+    ssl: {
+      minVersion: 'TLSv1.2',
+    },
   });
 
-  const dbName = process.env.DB_NAME || 'sanan_tempe_db';
-
-  console.log(`[Migration] Creating database '${dbName}' if not exists...`);
-  await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-  await connection.changeUser({ database: dbName });
-
+  console.log(`[Migration] Connected to database '${dbName}'`);
   console.log('[Migration] Creating tables...');
 
   // Users Table
